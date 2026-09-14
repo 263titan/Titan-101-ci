@@ -15,6 +15,7 @@ name: CI
 on:
   repository_dispatch:
     types: [run-ci]
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.event.client_payload.sha }}
