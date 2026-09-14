@@ -74,8 +74,8 @@ jobs:
               description: 'Install Dependencies',
               target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
             });
-          env:
-            PRIVATE_SHA: ${{ env.PRIVATE_SHA }}
+        env:
+          PRIVATE_SHA: ${{ env.PRIVATE_SHA }}
 
       - name: Render CI status (failure)
         if: failure()
@@ -90,8 +90,8 @@ jobs:
               description: 'Install Dependencies',
               target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
             });
-          env:
-            PRIVATE_SHA: ${{ env.PRIVATE_SHA }}
+        env:
+          PRIVATE_SHA: ${{ env.PRIVATE_SHA }}
 
   # ── Detect Affected ───────────────────────────────────────────────────────
   affected:
@@ -145,8 +145,8 @@ jobs:
               description: 'Detect Affected Projects',
               target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
             });
-          env:
-            PRIVATE_SHA: ${{ env.PRIVATE_SHA }}
+        env:
+          PRIVATE_SHA: ${{ env.PRIVATE_SHA }}
 
       - name: Render CI status (failure)
         if: failure()
@@ -161,8 +161,8 @@ jobs:
               description: 'Detect Affected Projects',
               target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
             });
-          env:
-            PRIVATE_SHA: ${{ env.PRIVATE_SHA }}
+        env:
+          PRIVATE_SHA: ${{ env.PRIVATE_SHA }}
 
   # ── TypeScript Build ──────────────────────────────────────────────────────
   build-ts:
@@ -219,8 +219,8 @@ jobs:
               description: 'Build (TypeScript)',
               target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
             });
-          env:
-            PRIVATE_SHA: ${{ env.PRIVATE_SHA }}
+        env:
+          PRIVATE_SHA: ${{ env.PRIVATE_SHA }}
 
       - name: Render CI status (failure)
         if: failure()
@@ -235,8 +235,8 @@ jobs:
               description: 'Build (TypeScript)',
               target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
             });
-          env:
-            PRIVATE_SHA: ${{ env.PRIVATE_SHA }}
+        env:
+          PRIVATE_SHA: ${{ env.PRIVATE_SHA }}
 
   # ── Rust Engine Build ─────────────────────────────────────────────────────
   build-rust:
@@ -302,8 +302,8 @@ jobs:
               description: 'Build (Rust Engines)',
               target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
             });
-          env:
-            PRIVATE_SHA: ${{ env.PRIVATE_SHA }}
+        env:
+          PRIVATE_SHA: ${{ env.PRIVATE_SHA }}
 
       - name: Render CI status (failure)
         if: failure()
@@ -318,8 +318,8 @@ jobs:
               description: 'Build (Rust Engines)',
               target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
             });
-          env:
-            PRIVATE_SHA: ${{ env.PRIVATE_SHA }}
+        env:
+          PRIVATE_SHA: ${{ env.PRIVATE_SHA }}
 
   # ── Unit Tests ────────────────────────────────────────────────────────────
   test:
@@ -383,8 +383,8 @@ jobs:
               description: 'Unit Tests',
               target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
             });
-          env:
-            PRIVATE_SHA: ${{ env.PRIVATE_SHA }}
+        env:
+          PRIVATE_SHA: ${{ env.PRIVATE_SHA }}
 
       - name: Render CI status (failure)
         if: failure()
@@ -399,8 +399,8 @@ jobs:
               description: 'Unit Tests',
               target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
             });
-          env:
-            PRIVATE_SHA: ${{ env.PRIVATE_SHA }}
+        env:
+          PRIVATE_SHA: ${{ env.PRIVATE_SHA }}
 
   # ── Lint & Type Check ─────────────────────────────────────────────────────
   quality:
@@ -475,8 +475,8 @@ jobs:
               description: 'Lint & Type Check',
               target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
             });
-          env:
-            PRIVATE_SHA: ${{ env.PRIVATE_SHA }}
+        env:
+          PRIVATE_SHA: ${{ env.PRIVATE_SHA }}
 
       - name: Render CI status (failure)
         if: failure()
@@ -491,5 +491,5 @@ jobs:
               description: 'Lint & Type Check',
               target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
             });
-          env:
-            PRIVATE_SHA: ${{ env.PRIVATE_SHA }}
+        env:
+          PRIVATE_SHA: ${{ env.PRIVATE_SHA }}
