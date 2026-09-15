@@ -1,0 +1,133 @@
+# Auto CI poller (public)
+#
+# THE automatic CI/CD path: instead of the private Titan-101 repo dispatching
+# on push (which consumes PRIVATE Actions minutes), this workflow polls the
+# private repo every 15 minutes for new commits on `main` and for open PRs,
+# and runs the full CI pipeline (pipeline.yml) on FREE PUBLIC minutes.
+#
+# Deduplication:
+#   - A commit/PR-head SHA is considered "already tested" when it has any
+#     `ci/titan101-*` commit status. The pipeline's jobs render those statuses.
+#   - A `ci/titan101-poll` marker status is written (pending) BEFORE the
+#     pipeline is invoked so overlapping poll runs for the same SHA do not
+#     double-trigger; pipeline.yml's `finalize` job flips it to success/failure.
+#   - The pipeline itself has `concurrency: ci-<sha>, cancel-in-progress: true`
+#     as a final guard.
+#
+# Required secret on THIS repo: REPO_ACCESS (read private repo contents,
+# commit statuses R/W). CODECOV_TOKEN is inherited into the pipeline.
+
+name: Auto CI Poller
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'   # every 15 minutes
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: auto-ci-poller
+  cancel-in-progress: false
+
+jobs:
+  detect:
+    name: Detect new Titan-101 work
+    runs-on: ubuntu-latest
+    outputs:
+      should-run: ${{ steps.pick.outputs.should-run }}
+      repo: ${{ steps.pick.outputs.repo }}
+      sha: ${{ steps.pick.outputs.sha }}
+      branch: ${{ steps.pick.outputs.branch }}
+      before: ${{ steps.pick.outputs.before }}
+    steps:
+      - name: Read Titan-101 main + PR state
+        id: pick
+        env:
+          GH_TOKEN: ${{ secrets.REPO_ACCESS }}
+        run: |
+          set -euo pipefail
+          REPO="263titan/Titan-101"
+          BRANCH=""
+          SHA=""
+          BEFORE=""
+          SHOULD_RUN="false"
+
+          is_tested() {
+            local s="$1"
+            local contexts
+            contexts=$(gh api "repos/${REPO}/commits/${s}/status" --jq -r '.statuses[]?.context // empty' 2>/dev/null || true)
+            if [ -n "$contexts" ]; then
+              if echo "$contexts" | grep -q '^ci/titan101-'; then
+                return 0
+              fi
+            fi
+            return 1
+          }
+
+          mark_pending() {
+            local s="$1"
+            gh api "repos/${REPO}/statuses/${s}" \
+              -f state='pending' \
+              -f context='ci/titan101-poll' \
+              -f description='Auto CI pipeline queued' >/dev/null
+          }
+
+          # 1) Priority: untested HEAD of main (covers pushes/merges)
+          MAIN_REF=$(gh api "repos/${REPO}/git/ref/heads/main" --jq -r '.object.sha' 2>/dev/null || true)
+          if [ -n "$MAIN_REF" ] && ! is_tested "$MAIN_REF"; then
+            PARENT=$(gh api "repos/${REPO}/commits/${MAIN_REF}" --jq -r '.parents[0]?.sha // empty' 2>/dev/null || true)
+            BRANCH="main"
+            SHA="$MAIN_REF"
+            BEFORE="$PARENT"
+            SHOULD_RUN="true"
+            mark_pending "$SHA" || true
+          fi
+
+          # 2) Fallback: most recently updated open PR with an untested head
+          if [ "$SHOULD_RUN" = "false" ]; then
+            PR_HEAD=$(gh api "repos/${REPO}/pulls?state=open&sort=updated&direction=desc&per_page=10" \
+              --jq -r '.[0].head.sha // empty' 2>/dev/null || true)
+            MEMBER_BASE=$(gh api "repos/${REPO}/pulls?state=open&sort=updated&direction=desc&per_page=10" \
+              --jq -r '.[0].base.sha // empty' 2>/dev/null || true)
+            PR_BRANCH=$(gh api "repos/${REPO}/pulls?state=open&sort=updated&direction=desc&per_page=10" \
+              --jq -r '.[0].head.ref // empty' 2>/dev/null || true)
+            if [ -n "$PR_HEAD" ] && ! is_tested "$PR_HEAD"; then
+              # Merge-base with base branch is the correct `before` for PR diffs
+              MERGE_BASE=$(gh api "repos/${REPO}/compare/${MEMBER_BASE}...${PR_HEAD}" \
+                --jq -r '.merge_base_commit.sha // empty' 2>/dev/null || true)
+              BRANCH="$PR_BRANCH"
+              SHA="$PR_HEAD"
+              BEFORE="$MERGE_BASE"
+              SHOULD_RUN="true"
+              mark_pending "$SHA" || true
+            fi
+          fi
+
+          echo "should-run=$SHOULD_RUN"
+          echo "repo=$REPO"
+          echo "sha=$SHA"
+          echo "branch=$BRANCH"
+          echo "before=$BEFORE"
+          echo "should-run=$SHOULD_RUN" >> "$GITHUB_OUTPUT"
+          echo "repo=$REPO" >> "$GITHUB_OUTPUT"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+          echo "before=$BEFORE" >> "$GITHUB_OUTPUT"
+
+      - name: Render poll status (no new work)
+        if: steps.pick.outputs.should-run == 'false'
+        run: echo "No untested Titan-101 commits or PRs; skipping CI this cycle."
+
+  run-ci:
+    name: Titan-101 CI Pipeline
+    needs: detect
+    if: needs.detect.outputs.should-run == 'true'
+    uses: ./.github/workflows/pipeline.yml
+    with:
+      private-repo: ${{ needs.detect.outputs.repo }}
+      private-sha: ${{ needs.detect.outputs.sha }}
+      private-branch: ${{ needs.detect.outputs.branch }}
+      private-before: ${{ needs.detect.outputs.before }}
+    secrets: inherit
