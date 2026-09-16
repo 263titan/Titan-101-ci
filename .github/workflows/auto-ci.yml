@@ -54,10 +54,20 @@ jobs:
           BEFORE=""
           SHOULD_RUN="false"
 
+          is_sha() { [[ "$1" =~ ^[0-9a-f]{40}$ ]]; }
+
+          # gh wrapper that yields empty output on API errors (auth failures,
+          # invalid refs, rate limits) instead of leaking the raw error body.
+          ghq() {
+            local out
+            out=$(gh api "$@" 2>/dev/null) || return 1
+            printf '%s' "$out"
+          }
+
           is_tested() {
             local s="$1"
             local contexts
-            contexts=$(gh api "repos/${REPO}/commits/${s}/status" --jq '.statuses[]?.context // empty' 2>/dev/null || true)
+            contexts=$(ghq "repos/${REPO}/commits/${s}/status" --jq '.statuses[]?.context // empty') || return 1
             if [ -n "$contexts" ]; then
               if echo "$contexts" | grep -q '^ci/titan101-'; then
                 return 0
@@ -68,40 +78,42 @@ jobs:
 
           mark_pending() {
             local s="$1"
-            gh api "repos/${REPO}/statuses/${s}" \
+            ghq "repos/${REPO}/statuses/${s}" \
               -f state='pending' \
               -f context='ci/titan101-poll' \
-              -f description='Auto CI pipeline queued' >/dev/null
+              -f description='Auto CI pipeline queued' >/dev/null || true
           }
 
           # 1) Priority: untested HEAD of main (covers pushes/merges)
-          MAIN_REF=$(gh api "repos/${REPO}/git/ref/heads/main" --jq '.object.sha' 2>/dev/null || true)
-          if [ -n "$MAIN_REF" ] && ! is_tested "$MAIN_REF"; then
-            PARENT=$(gh api "repos/${REPO}/commits/${MAIN_REF}" --jq '.parents[0]?.sha // empty' 2>/dev/null || true)
+          MAIN_REF=$(ghq "repos/${REPO}/git/ref/heads/main" --jq '.object.sha // empty') || MAIN_REF=""
+          if is_sha "$MAIN_REF" && ! is_tested "$MAIN_REF"; then
+            PARENT=$(ghq "repos/${REPO}/commits/${MAIN_REF}" --jq '.parents[0].sha // empty') || PARENT=""
+            is_sha "$PARENT" || PARENT=""
             BRANCH="main"
             SHA="$MAIN_REF"
             BEFORE="$PARENT"
             SHOULD_RUN="true"
-            mark_pending "$SHA" || true
+            mark_pending "$SHA"
           fi
 
           # 2) Fallback: most recently updated open PR with an untested head
           if [ "$SHOULD_RUN" = "false" ]; then
-            PR_HEAD=$(gh api "repos/${REPO}/pulls?state=open&sort=updated&direction=desc&per_page=10" \
-              --jq '.[0].head.sha // empty' 2>/dev/null || true)
-            MEMBER_BASE=$(gh api "repos/${REPO}/pulls?state=open&sort=updated&direction=desc&per_page=10" \
-              --jq '.[0].base.sha // empty' 2>/dev/null || true)
-            PR_BRANCH=$(gh api "repos/${REPO}/pulls?state=open&sort=updated&direction=desc&per_page=10" \
-              --jq '.[0].head.ref // empty' 2>/dev/null || true)
-            if [ -n "$PR_HEAD" ] && ! is_tested "$PR_HEAD"; then
+            PR_HEAD=$(ghq "repos/${REPO}/pulls?state=open&sort=updated&direction=desc&per_page=10" \
+              --jq '.[0].head.sha // empty') || PR_HEAD=""
+            MEMBER_BASE=$(ghq "repos/${REPO}/pulls?state=open&sort=updated&direction=desc&per_page=10" \
+              --jq '.[0].base.sha // empty') || MEMBER_BASE=""
+            PR_BRANCH=$(ghq "repos/${REPO}/pulls?state=open&sort=updated&direction=desc&per_page=10" \
+              --jq '.[0].head.ref // empty') || PR_BRANCH=""
+            if is_sha "$PR_HEAD" && ! is_tested "$PR_HEAD"; then
               # Merge-base with base branch is the correct `before` for PR diffs
-              MERGE_BASE=$(gh api "repos/${REPO}/compare/${MEMBER_BASE}...${PR_HEAD}" \
-                --jq '.merge_base_commit.sha // empty' 2>/dev/null || true)
+              MERGE_BASE=$(ghq "repos/${REPO}/compare/${MEMBER_BASE}...${PR_HEAD}" \
+                --jq '.merge_base_commit.sha // empty') || MERGE_BASE=""
+              is_sha "$MERGE_BASE" || MERGE_BASE=""
               BRANCH="$PR_BRANCH"
               SHA="$PR_HEAD"
               BEFORE="$MERGE_BASE"
               SHOULD_RUN="true"
-              mark_pending "$SHA" || true
+              mark_pending "$SHA"
             fi
           fi
 
