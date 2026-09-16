@@ -1,0 +1,111 @@
+# Nightly E2E (public)
+#
+# Nightly Playwright + Electron smoke of the flagship desktop apps
+# (titan-printsync, titan-plotsync), executed entirely on PUBLIC minutes.
+# Reports a `ci/titan101-e2e` commit status back to the private repo for the
+# tested SHA.
+#
+# Required secret on THIS repo: REPO_ACCESS.
+
+name: Nightly E2E
+
+on:
+  schedule:
+    - cron: '41 3 * * *'        # nightly 03:41 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PRIVATE_REPO: '263titan/Titan-101'
+
+jobs:
+  e2e:
+    name: Playwright Electron Smoke
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve target SHA
+        id: resolve
+        run: |
+          SHA=$(gh api "repos/$PRIVATE_REPO/commits/main" --jq .sha)
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "E2E on $PRIVATE_REPO@$SHA"
+        env:
+          GH_TOKEN: ${{ secrets.REPO_ACCESS }}
+          PRIVATE_REPO: ${{ env.PRIVATE_REPO }}
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: '263titan/Titan-101'
+          ref: ${{ steps.resolve.outputs.sha }}
+          token: ${{ secrets.REPO_ACCESS }}
+          fetch-depth: 1
+          submodules: 'recursive'
+
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Electron system libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 \
+            libcups2 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 \
+            libxrandr2 libgbm1 libasound2 libpango-1.0-0 libcairo2
+
+      - name: Build printsync for E2E
+        run: pnpm --filter @titan/titan-printsync build
+
+      - name: Build plotsync for E2E
+        run: pnpm --filter @titan/titan-plotsync build
+
+      - name: Run Playwright Electron smoke
+        run: xvfb-run -a pnpm --filter tests-e2e e2e
+
+      - name: Upload Playwright report (on failure)
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: playwright-report
+          path: tests/e2e/results/
+
+      - name: Render E2E status (success)
+        if: success()
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        with:
+          github-token: ${{ secrets.REPO_ACCESS }}
+          script: |
+            await github.rest.repos.createCommitStatus({
+              owner: '263titan', repo: 'Titan-101',
+              sha: process.env.PRIVATE_SHA,
+              state: 'success', context: 'ci/titan101-e2e',
+              description: 'Nightly E2E passed',
+              target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            });
+        env:
+          PRIVATE_SHA: ${{ steps.resolve.outputs.sha }}
+
+      - name: Render E2E status (failure)
+        if: failure()
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        with:
+          github-token: ${{ secrets.REPO_ACCESS }}
+          script: |
+            await github.rest.repos.createCommitStatus({
+              owner: '263titan', repo: 'Titan-101',
+              sha: process.env.PRIVATE_SHA,
+              state: 'failure', context: 'ci/titan101-e2e',
+              description: 'Nightly E2E failed',
+              target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            });
+        env:
+          PRIVATE_SHA: ${{ steps.resolve.outputs.sha }}

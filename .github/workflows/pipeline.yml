@@ -58,37 +58,38 @@ jobs:
     name: Install Dependencies
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: ${{ env.PRIVATE_REPO }}
           ref: ${{ env.PRIVATE_SHA }}
           token: ${{ secrets.REPO_ACCESS }}
-          fetch-depth: 0  # Full history needed for nx affected
+          fetch-depth: 0
+          submodules: 'recursive'  # populate titan-docs-portal / titan-plugins at pinned gitlinks
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
         with:
           version: 11
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
           cache: 'pnpm'
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # stable
         with:
           toolchain: 1.97.0
           components: rustfmt, clippy
 
       - name: Cache Rust
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
 
       - name: Install dependencies
-        run: pnpm install --no-frozen-lockfile
+        run: pnpm install --frozen-lockfile
 
       - name: Render CI status (success)
         if: success()
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           github-token: ${{ secrets.REPO_ACCESS }}
           script: |
@@ -104,7 +105,7 @@ jobs:
 
       - name: Render CI status (failure)
         if: failure()
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           github-token: ${{ secrets.REPO_ACCESS }}
           script: |
@@ -127,23 +128,24 @@ jobs:
       ts-projects: ${{ steps.affected.outputs.ts }}
       rust-projects: ${{ steps.affected.outputs.rust }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: ${{ env.PRIVATE_REPO }}
           ref: ${{ env.PRIVATE_SHA }}
           token: ${{ secrets.REPO_ACCESS }}
           fetch-depth: 0
+          submodules: 'recursive'  # populate titan-docs-portal / titan-plugins at pinned gitlinks
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
         with:
           version: 11
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
           cache: 'pnpm'
 
-      - run: pnpm install --no-frozen-lockfile
+      - run: pnpm install --frozen-lockfile
 
       - id: affected
         run: |
@@ -159,7 +161,7 @@ jobs:
 
       - name: Render CI status (success)
         if: success()
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           github-token: ${{ secrets.REPO_ACCESS }}
           script: |
@@ -175,7 +177,7 @@ jobs:
 
       - name: Render CI status (failure)
         if: failure()
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           github-token: ${{ secrets.REPO_ACCESS }}
           script: |
@@ -195,26 +197,27 @@ jobs:
     runs-on: ubuntu-latest
     needs: affected
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: ${{ env.PRIVATE_REPO }}
           ref: ${{ env.PRIVATE_SHA }}
           token: ${{ secrets.REPO_ACCESS }}
           fetch-depth: 0
+          submodules: 'recursive'  # populate titan-docs-portal / titan-plugins at pinned gitlinks
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
         with:
           version: 11
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
           cache: 'pnpm'
 
-      - run: pnpm install --no-frozen-lockfile
+      - run: pnpm install --frozen-lockfile
 
       - name: Cache Nx
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: .nx/cache
           key: nx-${{ runner.os }}-build-ts-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ env.PRIVATE_SHA }}
@@ -233,7 +236,7 @@ jobs:
 
       - name: Render CI status (success)
         if: success()
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           github-token: ${{ secrets.REPO_ACCESS }}
           script: |
@@ -249,7 +252,7 @@ jobs:
 
       - name: Render CI status (failure)
         if: failure()
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           github-token: ${{ secrets.REPO_ACCESS }}
           script: |
@@ -269,35 +272,36 @@ jobs:
     runs-on: ubuntu-latest
     needs: affected
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: ${{ env.PRIVATE_REPO }}
           ref: ${{ env.PRIVATE_SHA }}
           token: ${{ secrets.REPO_ACCESS }}
           fetch-depth: 0
+          submodules: 'recursive'  # populate titan-docs-portal / titan-plugins at pinned gitlinks
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
         with:
           version: 11
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
           cache: 'pnpm'
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # stable
         with:
           toolchain: 1.97.0
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
 
       - name: Install protoc for tonic-build codegen
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
 
-      - run: pnpm install --no-frozen-lockfile
+      - run: pnpm install --frozen-lockfile
 
       - name: Cache Nx
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: .nx/cache
           key: nx-${{ runner.os }}-build-rust-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ env.PRIVATE_SHA }}
@@ -316,7 +320,7 @@ jobs:
 
       - name: Render CI status (success)
         if: success()
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           github-token: ${{ secrets.REPO_ACCESS }}
           script: |
@@ -332,7 +336,7 @@ jobs:
 
       - name: Render CI status (failure)
         if: failure()
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           github-token: ${{ secrets.REPO_ACCESS }}
           script: |
@@ -352,30 +356,31 @@ jobs:
     runs-on: ubuntu-latest
     needs: [build-ts, build-rust]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: ${{ env.PRIVATE_REPO }}
           ref: ${{ env.PRIVATE_SHA }}
           token: ${{ secrets.REPO_ACCESS }}
           fetch-depth: 0
+          submodules: 'recursive'  # populate titan-docs-portal / titan-plugins at pinned gitlinks
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
         with:
           version: 11
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
           cache: 'pnpm'
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # stable
         with:
           toolchain: 1.97.0
 
-      - run: pnpm install --no-frozen-lockfile
+      - run: pnpm install --frozen-lockfile
 
       - name: Cache Nx
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: .nx/cache
           key: nx-${{ runner.os }}-test-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ env.PRIVATE_SHA }}
@@ -391,13 +396,13 @@ jobs:
           pnpm nx affected --target=test --base="$BASE" --parallel=4 --exclude=tests-hardware
 
       - name: Upload coverage
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@04b047e8bb82a0c002c8312c1c880fbc6a999d45 # v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Render CI status (success)
         if: success()
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           github-token: ${{ secrets.REPO_ACCESS }}
           script: |
@@ -413,7 +418,7 @@ jobs:
 
       - name: Render CI status (failure)
         if: failure()
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           github-token: ${{ secrets.REPO_ACCESS }}
           script: |
@@ -433,31 +438,46 @@ jobs:
     runs-on: ubuntu-latest
     needs: setup
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: ${{ env.PRIVATE_REPO }}
           ref: ${{ env.PRIVATE_SHA }}
           token: ${{ secrets.REPO_ACCESS }}
           fetch-depth: 0
+          submodules: 'recursive'  # populate titan-docs-portal / titan-plugins at pinned gitlinks
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
         with:
           version: 11
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
           cache: 'pnpm'
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # stable
         with:
           toolchain: 1.97.0
           components: rustfmt, clippy
 
-      - run: pnpm install --no-frozen-lockfile
+      - run: pnpm install --frozen-lockfile
+
+      - name: Install system dependencies for Rust crates and protoc
+        run: sudo apt-get update && sudo apt-get install -y libudev-dev protobuf-compiler
+
+      - name: Lint commit messages (Conventional Commits)
+        run: |
+          if [ -n "$PRIVATE_BEFORE" ] && [ "$PRIVATE_BEFORE" != "0000000000000000000000000000000000000000" ]; then
+            pnpm exec commitlint --from="$PRIVATE_BEFORE" --to="$PRIVATE_SHA"
+          else
+            pnpm exec commitlint --last
+          fi
+        env:
+          PRIVATE_SHA: ${{ env.PRIVATE_SHA }}
+          PRIVATE_BEFORE: ${{ env.PRIVATE_BEFORE }}
 
       - name: Cache Nx
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: .nx/cache
           key: nx-${{ runner.os }}-quality-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ env.PRIVATE_SHA }}
@@ -478,18 +498,20 @@ jobs:
           if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ]; then BASE="origin/main"; fi
           pnpm nx affected --target=typecheck --base="$BASE" --parallel=4
 
+      - name: Verify generated gRPC code is in sync
+        run: |
+          pnpm run codegen:proto
+          git diff --exit-code -- proto libs/networking/src/grpc/generated
+
       - name: Rust format check
         run: cargo fmt --all -- --check
-
-      - name: Install system dependencies for Rust crates
-        run: sudo apt-get update && sudo apt-get install -y libudev-dev
 
       - name: Rust clippy
         run: cargo clippy --workspace -- -D warnings
 
       - name: Render CI status (success)
         if: success()
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           github-token: ${{ secrets.REPO_ACCESS }}
           script: |
@@ -505,7 +527,7 @@ jobs:
 
       - name: Render CI status (failure)
         if: failure()
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           github-token: ${{ secrets.REPO_ACCESS }}
           script: |
@@ -525,27 +547,28 @@ jobs:
     runs-on: ubuntu-latest
     needs: [build-rust, quality]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: ${{ env.PRIVATE_REPO }}
           ref: ${{ env.PRIVATE_SHA }}
           token: ${{ secrets.REPO_ACCESS }}
           fetch-depth: 0
+          submodules: 'recursive'  # populate titan-docs-portal / titan-plugins at pinned gitlinks
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
         with:
           version: 11
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # stable
         with:
           toolchain: 1.97.0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
           cache: 'pnpm'
 
-      - run: pnpm install --no-frozen-lockfile
+      - run: pnpm install --frozen-lockfile
 
       - name: Run benchmark suite
         id: benchmark
@@ -569,7 +592,7 @@ jobs:
 
       - name: Upload benchmark results
         if: hashFiles('benchmark-results.json') != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: benchmark-results-${{ env.PRIVATE_SHA }}
           path: benchmark-results.json
@@ -587,7 +610,7 @@ jobs:
 
       - name: Render CI status (success)
         if: success()
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           github-token: ${{ secrets.REPO_ACCESS }}
           script: |
@@ -604,7 +627,7 @@ jobs:
 
       - name: Render CI status (failure)
         if: failure()
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           github-token: ${{ secrets.REPO_ACCESS }}
           script: |
@@ -623,27 +646,28 @@ jobs:
     runs-on: ubuntu-latest
     needs: [build-rust, quality]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: ${{ env.PRIVATE_REPO }}
           ref: ${{ env.PRIVATE_SHA }}
           token: ${{ secrets.REPO_ACCESS }}
           fetch-depth: 0
+          submodules: 'recursive'  # populate titan-docs-portal / titan-plugins at pinned gitlinks
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
         with:
           version: 11
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # stable
         with:
           toolchain: 1.97.0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
           cache: 'pnpm'
 
-      - run: pnpm install --no-frozen-lockfile
+      - run: pnpm install --frozen-lockfile
 
       - name: Run memory leak detection
         id: memory
@@ -660,14 +684,14 @@ jobs:
 
       - name: Upload memory profile
         if: always() && hashFiles('memory-profile.json') != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: memory-profile-${{ env.PRIVATE_SHA }}
           path: memory-profile.json
 
       - name: Render CI status (success)
         if: success()
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           github-token: ${{ secrets.REPO_ACCESS }}
           script: |
@@ -684,7 +708,7 @@ jobs:
 
       - name: Render CI status (failure)
         if: failure()
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           github-token: ${{ secrets.REPO_ACCESS }}
           script: |
@@ -703,27 +727,28 @@ jobs:
     runs-on: ubuntu-latest
     needs: [build-rust, quality]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: ${{ env.PRIVATE_REPO }}
           ref: ${{ env.PRIVATE_SHA }}
           token: ${{ secrets.REPO_ACCESS }}
           fetch-depth: 0
+          submodules: 'recursive'  # populate titan-docs-portal / titan-plugins at pinned gitlinks
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
         with:
           version: 11
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # stable
         with:
           toolchain: 1.97.0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
           cache: 'pnpm'
 
-      - run: pnpm install --no-frozen-lockfile
+      - run: pnpm install --frozen-lockfile
 
       - name: Validate protocols
         id: protocol
@@ -740,14 +765,14 @@ jobs:
 
       - name: Upload protocol validation results
         if: always() && hashFiles('protocol-results.json') != ''
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: protocol-validation-${{ env.PRIVATE_SHA }}
           path: protocol-results.json
 
       - name: Render CI status (success)
         if: success()
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           github-token: ${{ secrets.REPO_ACCESS }}
           script: |
@@ -764,7 +789,7 @@ jobs:
 
       - name: Render CI status (failure)
         if: failure()
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           github-token: ${{ secrets.REPO_ACCESS }}
           script: |
@@ -787,7 +812,7 @@ jobs:
     steps:
       - name: Render poll marker (success)
         if: ${{ !cancelled() && needs.setup.result == 'success' && needs.affected.result == 'success' && needs.build-ts.result == 'success' && needs.build-rust.result == 'success' && needs.test.result == 'success' && needs.quality.result == 'success' && needs.benchmark.result == 'success' && needs.memory-safety.result == 'success' && needs.protocol-validation.result == 'success' }}
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           github-token: ${{ secrets.REPO_ACCESS }}
           script: |
@@ -803,7 +828,7 @@ jobs:
 
       - name: Render poll marker (failure/cancelled)
         if: ${{ cancelled() || needs.setup.result != 'success' || needs.affected.result != 'success' || needs.build-ts.result != 'success' || needs.build-rust.result != 'success' || needs.test.result != 'success' || needs.quality.result != 'success' || needs.benchmark.result != 'success' || needs.memory-safety.result != 'success' || needs.protocol-validation.result != 'success' }}
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           github-token: ${{ secrets.REPO_ACCESS }}
           script: |
