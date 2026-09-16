@@ -465,14 +465,13 @@ jobs:
       - name: Install system dependencies for Rust crates
         run: sudo apt-get update && sudo apt-get install -y libudev-dev unzip
 
-      - name: Install protoc v5.29.3 (pinned to match committed generated output)
+      - name: Install protoc v5.29.3 (kept off PATH; used only by the gRPC sync gate)
         run: |
           mkdir -p /tmp/protoc
           curl -sSL -o /tmp/protoc/protoc.zip \
             https://github.com/protocolbuffers/protobuf/releases/download/v29.3/protoc-29.3-linux-x86_64.zip
           unzip -q /tmp/protoc/protoc.zip -d /tmp/protoc
-          sudo cp /tmp/protoc/bin/protoc /usr/local/bin/protoc
-          protoc --version
+          /tmp/protoc/bin/protoc --version
 
       - name: Lint commit messages (Conventional Commits)
         run: |
@@ -509,7 +508,7 @@ jobs:
 
       - name: Verify generated gRPC code is in sync
         run: |
-          pnpm run codegen:proto
+          PATH="/tmp/protoc/bin:$PATH" pnpm run codegen:proto
           git diff --exit-code -- proto libs/networking/src/grpc/generated
 
       - name: Rust format check
