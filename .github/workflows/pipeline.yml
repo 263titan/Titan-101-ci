@@ -462,8 +462,17 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - name: Install system dependencies for Rust crates and protoc
-        run: sudo apt-get update && sudo apt-get install -y libudev-dev protobuf-compiler
+      - name: Install system dependencies for Rust crates
+        run: sudo apt-get update && sudo apt-get install -y libudev-dev unzip
+
+      - name: Install protoc v5.29.3 (pinned to match committed generated output)
+        run: |
+          mkdir -p /tmp/protoc
+          curl -sSL -o /tmp/protoc/protoc.zip \
+            https://github.com/protocolbuffers/protobuf/releases/download/v29.3/protoc-29.3-linux-x86_64.zip
+          unzip -q /tmp/protoc/protoc.zip -d /tmp/protoc
+          sudo cp /tmp/protoc/bin/protoc /usr/local/bin/protoc
+          protoc --version
 
       - name: Lint commit messages (Conventional Commits)
         run: |
