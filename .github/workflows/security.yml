@@ -1,13 +1,14 @@
 # Security scan (public)
 #
-# Daily scheduled dependency CVE audit + secret scanning for the private
-# Titan-101 repo, executed entirely on PUBLIC minutes (no Titan-101 quota).
-# Reports a `ci/titan101-security` commit status back to the private repo.
+# Daily scheduled dependency CVE audit + secret scanning + CodeQL SAST for the
+# private Titan-101 repo, executed entirely on PUBLIC minutes (no Titan-101
+# quota). Reports a `ci/titan101-security` commit status back to the private
+# repo.
 #
-# Why not CodeQL here: code-scanning uploads are bound to the repo that runs
-# the workflow; running it on this PUBLIC repo would publish private-code
-# findings. SAST stays on the private repo's manual `security.yml`. This
-# workflow covers supply-chain (CVE) + secret leakage instead.
+# CodeQL notes: code-scanning uploads are bound to the repo that runs the
+# workflow, so SAST findings are NOT pushed to the private repo. Analysis runs
+# here with `upload: false` and the SARIF is kept as a workflow artifact, the
+# same posture the private manual `security.yml` had.
 #
 # Required secret on THIS repo: REPO_ACCESS.
 
@@ -113,3 +114,58 @@ jobs:
             });
         env:
           PRIVATE_SHA: ${{ steps.resolve.outputs.sha }}
+
+  sast:
+    name: Static Analysis (SAST)
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ['javascript-typescript']
+    steps:
+      - name: Resolve target SHA
+        id: resolve
+        run: |
+          SHA="${{ github.event.inputs.target-sha }}"
+          if [ -z "$SHA" ]; then
+            SHA=$(gh api "repos/$PRIVATE_REPO/commits/main" --jq .sha)
+          fi
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "Scanning $PRIVATE_REPO@$SHA"
+        env:
+          GH_TOKEN: ${{ secrets.REPO_ACCESS }}
+          PRIVATE_REPO: ${{ env.PRIVATE_REPO }}
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: '263titan/Titan-101'
+          ref: ${{ steps.resolve.outputs.sha }}
+          token: ${{ secrets.REPO_ACCESS }}
+          fetch-depth: 0
+          submodules: 'recursive'
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@311b4ee155dcdab395044f00946f664bd51ff173 # v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: 'none'
+
+      - name: Perform CodeQL Analysis
+        # upload stays false because code-scanning uploads bind to the repo
+        # running the workflow (this public one); findings must not leak.
+        # SARIF is kept as a workflow artifact below.
+        uses: github/codeql-action/analyze@311b4ee155dcdab395044f00946f664bd51ff173 # v4
+        with:
+          category: '/language:${{ matrix.language }}'
+          upload: false
+
+      - name: Upload Scan Results
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: sast-results-${{ matrix.language }}
+          path: ${{ runner.workspace }}/results/*.sarif
+          retention-days: 30

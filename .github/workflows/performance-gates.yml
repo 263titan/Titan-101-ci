@@ -1,0 +1,237 @@
+# Performance Gates (public runner, manual dispatch)
+#
+# Mirrors the former private-repo `performance-gates.yml` on FREE public
+# minutes: benchmark, memory-safety and protocol-validation. The private copy
+# has been removed. Reports `ci/titan101-gates` back to the private repo.
+
+name: Performance Gates
+
+on:
+  workflow_dispatch:
+    inputs:
+      private-sha:
+        description: 'Commit SHA of the private repo to gate (default: main HEAD)'
+        required: false
+        default: ''
+      private-branch:
+        description: 'Branch of the private repo'
+        required: false
+        default: 'main'
+
+permissions:
+  contents: read
+
+env:
+  PRIVATE_SHA: ${{ inputs.private-sha || 'main' }}
+  PRIVATE_BRANCH: ${{ inputs.private-branch }}
+
+jobs:
+  benchmark:
+    name: Rust Engine Performance Benchmark
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: 263titan/Titan-101
+          ref: ${{ env.PRIVATE_SHA }}
+          token: ${{ secrets.REPO_ACCESS }}
+          submodules: recursive
+
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+        with:
+          version: 11
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # stable
+        with:
+          toolchain: stable
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run benchmark suite
+        id: benchmark
+        run: pnpm run benchmark:all
+
+      - name: Parse benchmark results
+        id: parse
+        run: |
+          if [ -f "scripts/parse-benchmarks.js" ]; then
+            node scripts/parse-benchmarks.js > benchmark-results.json
+          else
+            echo "Benchmark parsing script not found"
+            exit 1
+          fi
+
+      - name: Upload benchmark results
+        if: hashFiles('benchmark-results.json') != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: benchmark-results
+          path: benchmark-results.json
+
+      - name: Performance regression check
+        id: regression
+        if: hashFiles('scripts/check-performance-regression.js') != ''
+        env:
+          PR_NUMBER: ${{ inputs.private-branch }}
+        run: node scripts/check-performance-regression.js
+
+      - name: Block on regression
+        if: steps.regression.outputs.has_regression == 'true'
+        run: |
+          echo "Performance regression detected. Release blocked."
+          exit 1
+
+      - name: Render CI status (success)
+        if: success()
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        with:
+          github-token: ${{ secrets.REPO_ACCESS }}
+          script: |
+            await github.rest.repos.createCommitStatus({
+              owner: '263titan', repo: 'Titan-101',
+              sha: process.env.PRIVATE_SHA,
+              state: 'success', context: 'ci/titan101-gates',
+              description: 'Performance gates passed (benchmark)',
+              target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            });
+        env:
+          PRIVATE_SHA: ${{ env.PRIVATE_SHA }}
+
+      - name: Render CI status (failure)
+        if: failure()
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        with:
+          github-token: ${{ secrets.REPO_ACCESS }}
+          script: |
+            await github.rest.repos.createCommitStatus({
+              owner: '263titan', repo: 'Titan-101',
+              sha: process.env.PRIVATE_SHA,
+              state: 'failure', context: 'ci/titan101-gates',
+              description: 'Performance gates failed (benchmark)',
+              target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            });
+        env:
+          PRIVATE_SHA: ${{ env.PRIVATE_SHA }}
+
+  memory-safety:
+    name: Memory Safety & Leak Detection
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: 263titan/Titan-101
+          ref: ${{ env.PRIVATE_SHA }}
+          token: ${{ secrets.REPO_ACCESS }}
+          submodules: recursive
+
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+        with:
+          version: 11
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # stable
+        with:
+          toolchain: stable
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run memory leak detection
+        run: pnpm run memory:test
+
+      - name: Check buffer pool statistics
+        if: hashFiles('scripts/check-memory-stats.js') != ''
+        run: node scripts/check-memory-stats.js
+
+      - name: Upload memory profile
+        if: always() && hashFiles('memory-profile.json') != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: memory-profile
+          path: memory-profile.json
+
+  protocol-validation:
+    name: Hardware Protocol Validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: 263titan/Titan-101
+          ref: ${{ env.PRIVATE_SHA }}
+          token: ${{ secrets.REPO_ACCESS }}
+          submodules: recursive
+
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+        with:
+          version: 11
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # stable
+        with:
+          toolchain: stable
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate protocols
+        run: pnpm run protocol:validate
+
+      - name: Protocol compliance report
+        if: hashFiles('scripts/protocol-compliance-report.js') != ''
+        run: node scripts/protocol-compliance-report.js
+
+      - name: Upload protocol validation results
+        if: always() && hashFiles('protocol-results.json') != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: protocol-validation
+          path: protocol-results.json
+
+      - name: Render CI status (success)
+        if: success()
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        with:
+          github-token: ${{ secrets.REPO_ACCESS }}
+          script: |
+            await github.rest.repos.createCommitStatus({
+              owner: '263titan', repo: 'Titan-101',
+              sha: process.env.PRIVATE_SHA,
+              state: 'success', context: 'ci/titan101-gates',
+              description: 'Performance gates passed (protocol)',
+              target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            });
+        env:
+          PRIVATE_SHA: ${{ env.PRIVATE_SHA }}
+
+      - name: Render CI status (failure)
+        if: failure()
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        with:
+          github-token: ${{ secrets.REPO_ACCESS }}
+          script: |
+            await github.rest.repos.createCommitStatus({
+              owner: '263titan', repo: 'Titan-101',
+              sha: process.env.PRIVATE_SHA,
+              state: 'failure', context: 'ci/titan101-gates',
+              description: 'Performance gates failed (protocol)',
+              target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            });
+        env:
+          PRIVATE_SHA: ${{ env.PRIVATE_SHA }}

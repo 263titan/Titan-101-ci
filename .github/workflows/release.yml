@@ -1,0 +1,311 @@
+# Titan Release — Build, Sign, and Publish (public runner)
+#
+# Triggered when the auto-ci.yml poller detects a new `v*` tag on the private
+# Titan-101 repo, or manually via workflow_dispatch. Builds/signs installers
+# per OS, creates the GitHub Release ON THE PRIVATE REPO (signed artifacts
+# never surface on a public repo), pushes cloud service images to GHCR, and
+# publishes @titan packages to GitHub Packages npm registry. Also fans out to
+# the desktop (napi-rs + Electron) and mobile (EAS) release pipelines.
+#
+# Required secrets on THIS repo: REPO_ACCESS, signing material listed per job,
+# EXPO_TOKEN (mobile), CODECOV_TOKEN (test pipeline only).
+
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      private-sha:
+        description: 'Commit SHA of the private repo to release (default: main HEAD)'
+        required: false
+        default: ''
+      private-branch:
+        description: 'Branch of the private repo'
+        required: false
+        default: 'main'
+      version-tag:
+        description: 'Version tag for the release (vX.Y.Z)'
+        required: true
+        default: ''
+  workflow_call:
+    inputs:
+      private-sha:
+        type: string
+        required: false
+        default: 'main'
+      private-branch:
+        type: string
+        required: false
+        default: 'main'
+      version-tag:
+        type: string
+        required: true
+    secrets: inherit
+
+concurrency:
+  group: release-${{ inputs.version-tag || github.sha }}
+  cancel-in-progress: false
+
+env:
+  PRIVATE_SHA: ${{ inputs.private-sha || 'main' }}
+  PRIVATE_BRANCH: ${{ inputs.private-branch }}
+  VERSION_TAG: ${{ inputs.version-tag }}
+
+jobs:
+  build-and-sign:
+    name: Build & Sign (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout private repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: 263titan/Titan-101
+          ref: ${{ env.PRIVATE_SHA }}
+          token: ${{ secrets.REPO_ACCESS }}
+          submodules: recursive
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+        with:
+          version: 11
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de # stable
+        with:
+          toolchain: 1.97.0
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Cache Nx
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: .nx/cache
+          key: nx-${{ runner.os }}-release-${{ hashFiles('**/pnpm-lock.yaml') }}-${{ env.PRIVATE_SHA }}
+          restore-keys: |
+            nx-${{ runner.os }}-release-${{ hashFiles('**/pnpm-lock.yaml') }}-
+            nx-${{ runner.os }}-release-
+            nx-${{ runner.os }}-
+
+      - name: Build all engines
+        run: ./scripts/build/build-engines.sh
+
+      - name: Build & package Electron apps
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+          NX_CLOUD_ACCESS_TOKEN: ${{ secrets.NX_CLOUD_ACCESS_TOKEN }}
+        run: ./scripts/build/build-all-platforms.sh
+
+      - name: Upload installers
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: installers-${{ matrix.os }}
+          path: dist/installers/
+
+      - name: Render release status (success)
+        if: success()
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        with:
+          github-token: ${{ secrets.REPO_ACCESS }}
+          script: |
+            await github.rest.repos.createCommitStatus({
+              owner: '263titan', repo: 'Titan-101',
+              sha: process.env.PRIVATE_SHA,
+              state: 'success', context: 'ci/titan101-release',
+              description: `Release ${process.env.VERSION_TAG} built on ${process.env.OS_NAME}`,
+              target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            });
+        env:
+          PRIVATE_SHA: ${{ env.PRIVATE_SHA }}
+          VERSION_TAG: ${{ env.VERSION_TAG }}
+          OS_NAME: ${{ matrix.os }}
+
+      - name: Render release status (failure)
+        if: failure()
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        with:
+          github-token: ${{ secrets.REPO_ACCESS }}
+          script: |
+            await github.rest.repos.createCommitStatus({
+              owner: '263titan', repo: 'Titan-101',
+              sha: process.env.PRIVATE_SHA,
+              state: 'failure', context: 'ci/titan101-release',
+              description: `Release ${process.env.VERSION_TAG} failed on ${process.env.OS_NAME}`,
+              target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            });
+        env:
+          PRIVATE_SHA: ${{ env.PRIVATE_SHA }}
+          VERSION_TAG: ${{ env.VERSION_TAG }}
+          OS_NAME: ${{ matrix.os }}
+
+  publish:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    needs: build-and-sign
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout private repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: 263titan/Titan-101
+          ref: ${{ env.PRIVATE_SHA }}
+          token: ${{ secrets.REPO_ACCESS }}
+          submodules: recursive
+
+      - name: Download all installers
+        uses: actions/download-artifact@eac690c756ca2ae2f82fde217f05f482e3a30bae # v4
+        with:
+          pattern: installers-*
+          merge-multiple: true
+          path: dist/installers/
+
+      - name: Create GitHub Release on private repo
+        uses: softprops/action-gh-release@v2
+        with:
+          repository: 263titan/Titan-101
+          tag: ${{ env.VERSION_TAG }}
+          target_commitish: ${{ env.PRIVATE_SHA }}
+          token: ${{ secrets.REPO_ACCESS }}
+          files: dist/installers/**/*
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(env.VERSION_TAG, 'beta') || contains(env.VERSION_TAG, 'canary') }}
+
+  build-docker:
+    name: Build & Push Docker Images (Cloud Services)
+    runs-on: ubuntu-latest
+    needs: build-and-sign
+    permissions:
+      packages: write
+    steps:
+      - name: Checkout private repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: 263titan/Titan-101
+          ref: ${{ env.PRIVATE_SHA }}
+          token: ${{ secrets.REPO_ACCESS }}
+          submodules: recursive
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push service images
+        run: |
+          for service in cert-srv titanflow titandaemon devicesync synctrace colorvision production-intel updater fontsrv plotvision truepath; do
+            if [ -f "services/$service/Dockerfile" ]; then
+              echo "Building $service..."
+              docker buildx build \
+                --platform linux/amd64,linux/arm64 \
+                --tag ghcr.io/263titan/$service:${{ env.VERSION_TAG }} \
+                --tag ghcr.io/263titan/$service:latest \
+                --cache-from type=registry,ref=ghcr.io/263titan/$service:buildcache \
+                --cache-to type=registry,ref=ghcr.io/263titan/$service:buildcache,mode=max \
+                --push \
+                services/$service
+            else
+              echo "Skipping $service (no Dockerfile)"
+            fi
+          done
+
+  publish-npm:
+    name: Publish to GitHub Packages (npm)
+    runs-on: ubuntu-latest
+    needs: build-and-sign
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout private repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: 263titan/Titan-101
+          ref: ${{ env.PRIVATE_SHA }}
+          token: ${{ secrets.REPO_ACCESS }}
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+        with:
+          version: 11
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+          registry-url: 'https://registry.pkg.github.com'
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build public packages
+        run: |
+          pnpm nx build sdk-js
+          pnpm nx build titan-installer
+          pnpm nx build titan-plugins
+          pnpm nx build titan-docs-portal || true
+
+      - name: Login to GitHub Packages npm registry
+        run: |
+          cat <<EOF > .npmrc
+          @titan:registry=https://registry.pkg.github.com
+          //registry.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}
+          EOF
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish packages to GitHub Packages
+        run: |
+          pnpm publish --recursive --filter "@titan/*" --access restricted --tag ${{ env.VERSION_TAG }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  desktop-release:
+    name: Desktop Production Release Pipeline
+    needs: build-and-sign
+    uses: ./.github/workflows/desktop-release.yml
+    with:
+      private-sha: ${{ env.PRIVATE_SHA }}
+      private-branch: ${{ env.PRIVATE_BRANCH }}
+      version-tag: ${{ env.VERSION_TAG }}
+    secrets: inherit
+
+  mobile-release:
+    name: Mobile EAS Build & Submit
+    needs: build-and-sign
+    uses: ./.github/workflows/mobile-release.yml
+    with:
+      private-sha: ${{ env.PRIVATE_SHA }}
+      private-branch: ${{ env.PRIVATE_BRANCH }}
+      profile: 'production'
+      version-tag: ${{ env.VERSION_TAG }}
+    secrets: inherit
